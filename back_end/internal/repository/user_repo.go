@@ -5,6 +5,7 @@ package repository
 import (
 	"errors"
 
+	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 
 	"vibe/internal/model"
@@ -52,7 +53,15 @@ func (r *UserRepo) GetByID(id uint64) (*model.User, error) {
 	return &u, nil
 }
 
-// IsDuplicate 判断是否唯一冲突（用户名或邮箱）。
+// IsDuplicate 判断是否唯一键冲突。
+// 兼容两种来源：GORM 翻译后的 gorm.ErrDuplicatedKey，以及 MySQL 原生 1062 错误。
 func IsDuplicate(err error) bool {
-	return errors.Is(err, gorm.ErrDuplicatedKey)
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+		return true
+	}
+	return false
 }

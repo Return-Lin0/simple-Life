@@ -1,0 +1,22 @@
+# VIBE 中间件编排：RabbitMQ（MySQL 与 Redis 使用本机已装服务）
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: vibe-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"   # AMQP 协议端口（后端连接用）
+      - "15672:15672" # 管理面板 http://localhost:15672（admin / password）
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  rabbitmq_data:

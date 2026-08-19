@@ -2,8 +2,8 @@
   <div class="auth-page">
     <div class="auth-card">
       <div class="brand">
-        <div class="brand-logo">V</div>
-        <h1 class="brand-name">加入 VIBE</h1>
+        <div class="brand-logo">S</div>
+        <h1 class="brand-name">加入 SimpleLife</h1>
         <p class="brand-slogan">注册账号，开始井井有条的生活</p>
       </div>
 

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -299,6 +300,11 @@ func (s *TodoService) Today(userID uint64) ([]dto.TodoView, error) {
 
 // buildTodo 将请求转换为模型。
 func (s *TodoService) buildTodo(userID uint64, req *dto.TodoReq) *model.Todo {
+	// MySQL JSON 列不接受空字符串，非重复事项统一写入合法 JSON 值 null
+	rule := strings.TrimSpace(req.RecurrenceRule)
+	if req.RecurrenceType == model.RecurrenceNone || rule == "" {
+		rule = "null"
+	}
 	return &model.Todo{
 		UserID:              userID,
 		Title:               req.Title,
@@ -311,7 +317,7 @@ func (s *TodoService) buildTodo(userID uint64, req *dto.TodoReq) *model.Todo {
 		Category:            req.Category,
 		Status:              model.TodoStatusPending,
 		RecurrenceType:      req.RecurrenceType,
-		RecurrenceRule:      req.RecurrenceRule,
+		RecurrenceRule:      rule,
 		ReminderEnabled:     req.ReminderEnabled,
 		RemindOffsetMinutes: req.RemindOffsetMinutes,
 	}
@@ -433,6 +439,10 @@ func (s *TodoService) ensureRecurringInstances(userID uint64, startDate, endDate
 		}
 		err = s.db.Transaction(func(tx *gorm.DB) error {
 			if err := s.todos.BatchCreateInstancesTx(tx, instances); err != nil {
+				// 并发请求下可能已被其他请求创建（唯一索引兜底），视为成功
+				if repository.IsDuplicate(err) {
+					return nil
+				}
 				return err
 			}
 			// 根启用提醒时，为每个新实例同步生成提醒任务
@@ -480,6 +490,14 @@ func (s *TodoService) nextOccurrenceDates(root *model.Todo, startDate, endDate s
 	if err1 != nil || err2 != nil || start.After(end) {
 		return nil
 	}
+	// 系列实例只能从“系列开始日期”起生成，禁止在根待办日期之前出现（修复时间重复问题）
+	rootDate, err := timeutil.ParseDate(root.EventDate)
+	if err != nil {
+		return nil
+	}
+	if start.Before(rootDate) {
+		start = rootDate
+	}
 	// 防御：单次最多生成 366 天，避免异常配置导致无限循环
 	if timeutil.DaysBetween(start, end) > 366 {
 		end = start.AddDate(0, 0, 366)
@@ -506,10 +524,6 @@ func (s *TodoService) nextOccurrenceDates(root *model.Todo, startDate, endDate s
 			}
 		}
 	case model.RecurrenceMonthly:
-		rootDate, err := timeutil.ParseDate(root.EventDate)
-		if err != nil {
-			return nil
-		}
 		for d := start; !d.After(end); d = d.AddDate(0, 1, 0) {
 			occ := monthlyOccurrence(d, rootDate)
 			if !occ.Before(start) && !occ.After(end) {

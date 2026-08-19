@@ -170,7 +170,8 @@ func (r *RabbitMQ) PublishDead(msg ReminderMessage) error {
 
 // ConsumeReminder 订阅主队列，handler 返回 error 表示处理失败（进入重试链路）。
 // 使用手动 ACK，保证消费前崩溃不会丢消息。
-func (r *RabbitMQ) ConsumeReminder(handler func(msg ReminderMessage) error) error {
+// onFinalFail 在重试超限进入死信时回调，供调用方把任务标记为失败（可被补偿恢复）。
+func (r *RabbitMQ) ConsumeReminder(handler func(msg ReminderMessage) error, onFinalFail func(msg ReminderMessage)) error {
 	deliveries, err := r.channel.Consume(QueueReminder, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("订阅主队列失败: %w", err)
@@ -192,6 +193,9 @@ func (r *RabbitMQ) ConsumeReminder(handler func(msg ReminderMessage) error) erro
 			if attempt >= MaxAttempts {
 				// 重试超限：归档死信并 ACK，避免无限重投
 				_ = r.PublishDead(msg)
+				if onFinalFail != nil {
+					onFinalFail(msg)
+				}
 				_ = delivery.Ack(false)
 				continue
 			}

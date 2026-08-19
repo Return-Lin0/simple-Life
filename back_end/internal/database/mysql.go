@@ -33,7 +33,9 @@ func NewMySQL(cfg *config.MySQLConfig) (*gorm.DB, error) {
 	}
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	// 连接最长复用 5 分钟：Windows 环境（如 phpStudy 的 MySQL）会回收长时间空闲连接，
+	// 过长的 ConnMaxLifetime 会导致“connection aborted”类瞬时错误。
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	// 自动迁移：生产环境建议改为显式 SQL 迁移脚本（见设计文档 10.3）
 	if err := db.AutoMigrate(

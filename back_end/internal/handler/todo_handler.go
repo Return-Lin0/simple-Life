@@ -145,7 +145,11 @@ func (h *TodoHandler) UpdateStatus(c *gin.Context) {
 		response.ParamError(c, "请求体格式不正确")
 		return
 	}
-	if err := h.todos.UpdateStatus(uid, id, req.Status); err != nil {
+	if req.Status == nil {
+		response.ParamError(c, "缺少状态值")
+		return
+	}
+	if err := h.todos.UpdateStatus(uid, id, *req.Status); err != nil {
 		respondError(c, err)
 		return
 	}
