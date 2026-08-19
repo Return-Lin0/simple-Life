@@ -4,7 +4,7 @@ import { defineStore } from 'pinia'
 import { habitApi } from '@/api/modules'
 import type { Habit } from '@/types'
 
-const CHECKED_KEY = 'vibe.habit.checked'
+const CHECKED_KEY = 'simplelife.habit.checked'
 
 function loadChecked(): Record<string, boolean> {
   try {

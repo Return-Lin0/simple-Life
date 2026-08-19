@@ -160,7 +160,7 @@ function onOpen() {
     if (props.todo.recurrence_rule) {
       try {
         const rule = JSON.parse(props.todo.recurrence_rule)
-        if (Array.isArray(rule.weekdays)) weekdays.value = rule.weekdays
+        if (rule && Array.isArray(rule.weekdays)) weekdays.value = rule.weekdays
       } catch {
         weekdays.value = [1]
       }

@@ -3,8 +3,8 @@
     <!-- 侧边导航 -->
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-logo">V</div>
-        <span class="brand-name">VIBE</span>
+        <div class="brand-logo">S</div>
+        <span class="brand-name">SimpleLife</span>
       </div>
 
       <nav class="nav">
@@ -138,7 +138,7 @@ const navItems = [
   { name: 'notifications', label: '提醒中心', icon: 'Bell' },
 ]
 
-const pageTitle = computed(() => (route.meta.title as string) || 'VIBE')
+const pageTitle = computed(() => (route.meta.title as string) || 'SimpleLife')
 const subtitle = computed(() => (route.name === 'today' ? `${greeting()}，今天也要元气满满` : '把生活安排得井井有条'))
 const avatarText = computed(() => (authStore.user?.nickname || 'U').slice(0, 1).toUpperCase())
 const isActive = (name: string) => route.name === name
@@ -203,7 +203,7 @@ onMounted(async () => {
     onReminder: (raw) => {
       const ev = raw as unknown as SseReminderEvent
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('VIBE 提醒', { body: ev.title })
+        new Notification('SimpleLife 提醒', { body: ev.title })
       }
       ElMessage({ type: 'warning', message: ev.title, duration: 5000, grouping: true })
       notificationStore.pushLocal({

@@ -2,8 +2,8 @@
   <div class="auth-page">
     <div class="auth-card">
       <div class="brand">
-        <div class="brand-logo">V</div>
-        <h1 class="brand-name">VIBE</h1>
+        <div class="brand-logo">S</div>
+        <h1 class="brand-name">SimpleLife</h1>
         <p class="brand-slogan">把生活安排得井井有条</p>
       </div>
 

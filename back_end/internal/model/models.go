@@ -56,16 +56,21 @@ type Todo struct {
 	UserID              uint64         `gorm:"not null;index:idx_user_date,priority:1;index:idx_user_status,priority:1;index:idx_user_recur,priority:1" json:"user_id"`
 	Title               string         `gorm:"size:128;not null" json:"title"`
 	Description         string         `gorm:"type:text" json:"description,omitempty"`
-	EventDate           string         `gorm:"type:date;not null;index:idx_user_date,priority:2" json:"event_date"`
-	StartTime           string         `gorm:"type:time" json:"start_time,omitempty"` // HH:mm:ss
-	EndTime             string         `gorm:"type:time" json:"end_time,omitempty"`   // HH:mm:ss
+	// 说明：parseTime=True 时 MySQL 驱动会把 DATE 列读成 time.Time，再扫描进 string
+	// 会变成 "2026-08-20T00:00:00+08:00"，导致所有字符串日期比较/解析失效（逾期、
+	// 重复实例去重、连续天数等）。因此日期字符串列统一使用 varchar(10)，格式由服务层校验。
+	EventDate           string         `gorm:"type:varchar(10);not null;index:idx_user_date,priority:2;uniqueIndex:uk_parent_date,priority:2" json:"event_date"`
+	// 说明：GORM 的 MySQL 驱动会把 "type:time" 映射为 datetime(3)，
+	// 无法直接存储 HH:mm:ss，因此使用 varchar(8) 并由服务层校验格式。
+	StartTime           string         `gorm:"type:varchar(8)" json:"start_time,omitempty"` // HH:mm:ss
+	EndTime             string         `gorm:"type:varchar(8)" json:"end_time,omitempty"`   // HH:mm:ss
 	IsAllDay            bool           `gorm:"not null;default:false" json:"is_all_day"`
 	Priority            int            `gorm:"type:tinyint;not null;default:1" json:"priority"`
 	Category            string         `gorm:"size:32;not null;default:'other'" json:"category"`
 	Status              int            `gorm:"type:tinyint;not null;default:0;index:idx_user_status,priority:2" json:"status"`
 	RecurrenceType      int            `gorm:"type:tinyint;not null;default:0;index:idx_user_recur,priority:2" json:"recurrence_type"`
 	RecurrenceRule      string         `gorm:"type:json" json:"recurrence_rule,omitempty"` // 如 {"weekdays":[1,3,5]}
-	ParentID            *uint64        `gorm:"index" json:"parent_id,omitempty"`           // 重复系列根待办 ID
+	ParentID            *uint64        `gorm:"index;uniqueIndex:uk_parent_date,priority:1" json:"parent_id,omitempty"` // 重复系列根待办 ID
 	ReminderEnabled     bool           `gorm:"not null;default:false" json:"reminder_enabled"`
 	RemindOffsetMinutes *int           `gorm:"default:null" json:"remind_offset_minutes,omitempty"`
 	CompletedAt         *time.Time     `gorm:"default:null" json:"completed_at,omitempty"`
@@ -120,7 +125,7 @@ type HabitRecord struct {
 	ID         uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
 	HabitID    uint64    `gorm:"not null;uniqueIndex:uk_habit_date,priority:1" json:"habit_id"`
 	UserID     uint64    `gorm:"not null;index:idx_user" json:"user_id"`
-	RecordDate string    `gorm:"type:date;not null;uniqueIndex:uk_habit_date,priority:2" json:"record_date"`
+	RecordDate string    `gorm:"type:varchar(10);not null;uniqueIndex:uk_habit_date,priority:2" json:"record_date"`
 	CreatedAt  time.Time `gorm:"not null" json:"created_at"`
 }
 
@@ -129,7 +134,7 @@ type Anniversary struct {
 	ID              uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID          uint64         `gorm:"not null;index:idx_user_date,priority:1" json:"user_id"`
 	Name            string         `gorm:"size:64;not null" json:"name"`
-	EventDate       string         `gorm:"type:date;not null;index:idx_user_date,priority:2" json:"event_date"`
+	EventDate       string         `gorm:"type:varchar(10);not null;index:idx_user_date,priority:2" json:"event_date"`
 	IsLunar         bool           `gorm:"not null;default:false" json:"is_lunar"`
 	RepeatYearly    bool           `gorm:"not null;default:true" json:"repeat_yearly"`
 	RemindEnabled   bool           `gorm:"not null;default:false" json:"remind_enabled"`
