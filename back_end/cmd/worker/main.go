@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -65,24 +64,7 @@ func run() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := amqpConn.ConsumeReminder(
-			func(msg mq.ReminderMessage) error {
-				// 对瞬时错误（如数据库连接被回收）在进程内重试，避免消耗 MQ 重试次数
-				var lastErr error
-				for i := 0; i < 3; i++ {
-					if err := reminderSvc.ProcessMessage(msg); err == nil {
-						return nil
-					} else {
-						lastErr = err
-					}
-					time.Sleep(time.Second)
-				}
-				return lastErr
-			},
-			func(msg mq.ReminderMessage) {
-				_ = reminderSvc.MarkTaskFailed(msg.TaskID)
-			},
-		); err != nil {
+		if err := amqpConn.ConsumeReminder(reminderSvc.ProcessMessage); err != nil {
 			log.Error("提醒消费异常退出", zap.Error(err))
 		}
 	}()
