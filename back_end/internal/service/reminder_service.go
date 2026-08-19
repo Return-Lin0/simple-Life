@@ -72,11 +72,6 @@ func (s *ReminderService) Compensation(batch int) error {
 	return nil
 }
 
-// MarkTaskFailed 标记任务失败（死信回调），供补偿扫描恢复。
-func (s *ReminderService) MarkTaskFailed(taskID uint64) error {
-	return s.reminders.MarkFailed(taskID)
-}
-
 // ProcessMessage worker 消费处理：
 // Redis 幂等去重 → 写入提醒中心 → 通过 Redis Pub/Sub 通知 API 进程推 SSE → 标记已送达。
 // 处理失败返回 error，由 mq.ConsumeReminder 进入重试/死信链路。

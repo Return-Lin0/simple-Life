@@ -65,9 +65,7 @@ type TodoReq struct {
 
 // TodoStatusReq 完成/恢复请求。
 type TodoStatusReq struct {
-	// 指针类型：status=0（恢复未完成）是合法值，
-	// 若用 int + binding:"required"，0 会被校验器当成“未填写”而拒绝。
-	Status *int `json:"status" binding:"required"`
+	Status int `json:"status" binding:"required"`
 }
 
 // TodoView 是待办列表返回结构，在模型基础上附加动态计算的 overdue 标记。
