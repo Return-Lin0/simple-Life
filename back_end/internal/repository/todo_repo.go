@@ -170,6 +170,33 @@ func (r *TodoRepo) Delete(id, userID uint64) error {
 	return r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Todo{}).Error
 }
 
+// BatchDelete 批量软删除待办（越权防护：必须同时限定 user_id）。
+func (r *TodoRepo) BatchDelete(ids []uint64, userID uint64) (int64, error) {
+	res := r.db.Where("id IN ? AND user_id = ?", ids, userID).Delete(&model.Todo{})
+	return res.RowsAffected, res.Error
+}
+
+// BatchDeleteTx 在指定事务内批量软删除待办。
+func (r *TodoRepo) BatchDeleteTx(tx *gorm.DB, ids []uint64, userID uint64) (int64, error) {
+	res := tx.Where("id IN ? AND user_id = ?", ids, userID).Delete(&model.Todo{})
+	return res.RowsAffected, res.Error
+}
+
+// BatchUpdateStatus 批量更新完成状态，并同步 completed_at。
+func (r *TodoRepo) BatchUpdateStatus(ids []uint64, userID uint64, status int) (int64, error) {
+	updates := map[string]interface{}{"status": status}
+	if status == model.TodoStatusCompleted {
+		now := time.Now()
+		updates["completed_at"] = &now
+	} else {
+		updates["completed_at"] = nil
+	}
+	res := r.db.Model(&model.Todo{}).
+		Where("id IN ? AND user_id = ?", ids, userID).
+		Updates(updates)
+	return res.RowsAffected, res.Error
+}
+
 // FindRoots 查询用户全部重复系列根待办（recurrence_type > 0）。
 func (r *TodoRepo) FindRoots(userID uint64) ([]model.Todo, error) {
 	var list []model.Todo

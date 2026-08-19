@@ -265,6 +265,42 @@ Test-Case '逾期事项标记' {
     if ($r.Data.data.overdue -ne $true) { throw "逾期标记缺失，原始响应：$($r.Raw)" }
 }
 
+# ---------- 4. 待办批量操作 ----------
+Write-Host ''
+Write-Host '[待办批量操作]' -ForegroundColor Yellow
+Test-Case '批量标记完成与恢复' {
+    $ids = @()
+    1..3 | ForEach-Object {
+        $ids += (Invoke-Api POST '/todos' -Token $A.Token -Body @{ title = "批量待办$_"; event_date = '2026-08-20' }).Data.data.id
+    }
+    $r1 = Invoke-Api PATCH '/todos/batch-status' -Token $A.Token -Body @{ ids = @($ids[0], $ids[1]); status = 1 }
+    Assert-Status $r1 200 '批量完成'
+    Assert-True ($r1.Data.data.affected -eq 2) "批量完成影响数=$($r1.Data.data.affected)"
+    $r2 = Invoke-Api PATCH '/todos/batch-status' -Token $A.Token -Body @{ ids = @($ids[0]); status = 0 }
+    Assert-Status $r2 200 '批量恢复'
+    Assert-True ($r2.Data.data.affected -eq 1) "批量恢复影响数=$($r2.Data.data.affected)"
+}
+Test-Case '批量删除并清理提醒任务' {
+    $ids = @()
+    1..3 | ForEach-Object {
+        $ids += (Invoke-Api POST '/todos' -Token $A.Token -Body @{
+            title = "批量删除$_"; event_date = '2026-08-21'; start_time = '14:00:00'
+            reminder_enabled = $true; remind_offset_minutes = 5
+        }).Data.data.id
+    }
+    $before = Sql-Query "SELECT COUNT(*) FROM reminder_tasks WHERE target_type=1 AND target_id IN ($($ids -join ','))"
+    Assert-True ($before -eq '3') "删除前提醒任务=$before，应为3"
+    $r = Invoke-Api POST '/todos/batch-delete' -Token $A.Token -Body @{ ids = $ids }
+    Assert-Status $r 200 '批量删除'
+    Assert-True ($r.Data.data.affected -eq 3) "批量删除影响数=$($r.Data.data.affected)"
+    $after = Sql-Query "SELECT COUNT(*) FROM reminder_tasks WHERE target_type=1 AND target_id IN ($($ids -join ','))"
+    Assert-True ($after -eq '0') "删除后提醒任务=$after，应清理为0"
+}
+Test-Case '批量参数校验（空数组被拒）' {
+    $r = Invoke-Api PATCH '/todos/batch-status' -Token $A.Token -Body @{ ids = @(); status = 1 }
+    Assert-Status $r 400 '空数组批量操作'
+}
+
 # ---------- 4. 重复事项（回归：时间重复添加修复验证） ----------
 Write-Host ''
 Write-Host '[重复事项回归]' -ForegroundColor Yellow

@@ -64,6 +64,8 @@ func New(cfg *config.Config, deps *Deps) *gin.Engine {
 	protected.GET("/todos", deps.Todo.List)
 	protected.POST("/todos", deps.Todo.Create)
 	protected.GET("/todos/calendar", deps.Todo.Calendar)
+	protected.POST("/todos/batch-delete", deps.Todo.BatchDelete)
+	protected.PATCH("/todos/batch-status", deps.Todo.BatchUpdateStatus)
 	protected.GET("/todos/:id", deps.Todo.Get)
 	protected.PUT("/todos/:id", deps.Todo.Update)
 	protected.DELETE("/todos/:id", deps.Todo.Delete)

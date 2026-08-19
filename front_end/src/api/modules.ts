@@ -41,6 +41,10 @@ export const todoApi = {
   setStatus: (id: number, status: number) =>
     request<null>({ url: `/todos/${id}/status`, method: 'PATCH', data: { status } }),
   convertToNote: (id: number) => request<{ note_id: number }>({ url: `/todos/${id}/convert-to-note`, method: 'POST' }),
+  batchDelete: (ids: number[]) =>
+    request<{ affected: number }>({ url: '/todos/batch-delete', method: 'POST', data: { ids } }),
+  batchStatus: (ids: number[], status: number) =>
+    request<{ affected: number }>({ url: '/todos/batch-status', method: 'PATCH', data: { ids, status } }),
 }
 
 // ---------- 标签 ----------

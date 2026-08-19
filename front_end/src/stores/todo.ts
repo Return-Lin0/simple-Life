@@ -57,5 +57,11 @@ export const useTodoStore = defineStore('todo', {
     async convertToNote(id: number) {
       return todoApi.convertToNote(id)
     },
+    async batchDelete(ids: number[]) {
+      return todoApi.batchDelete(ids)
+    },
+    async batchUpdateStatus(ids: number[], status: number) {
+      return todoApi.batchStatus(ids, status)
+    },
   },
 })

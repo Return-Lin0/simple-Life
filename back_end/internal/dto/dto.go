@@ -70,6 +70,12 @@ type TodoStatusReq struct {
 	Status *int `json:"status" binding:"required"`
 }
 
+// BatchTodoReq 批量操作请求（批量删除 / 批量状态更新共用）。
+type BatchTodoReq struct {
+	IDs    []uint64 `json:"ids" binding:"required"`
+	Status *int     `json:"status"` // 仅批量状态更新时使用
+}
+
 // TodoView 是待办列表返回结构，在模型基础上附加动态计算的 overdue 标记。
 type TodoView struct {
 	*model.Todo

@@ -18,6 +18,38 @@
         <el-option label="日期" value="event_date" />
       </el-select>
       <el-button round :icon="Refresh" circle title="重置筛选" @click="resetFilters" />
+      <el-button
+        round
+        :type="selectionMode ? 'primary' : 'default'"
+        :icon="selectionMode ? 'Finished' : 'Select'"
+        @click="toggleSelectionMode"
+      >
+        {{ selectionMode ? '退出多选' : '多选' }}
+      </el-button>
+    </div>
+
+    <!-- 多选工具条 -->
+    <div v-if="selectionMode" class="select-bar vibe-card">
+      <el-checkbox
+        :model-value="allSelected"
+        :indeterminate="partialSelected"
+        @change="toggleSelectAll"
+      >
+        全选
+      </el-checkbox>
+      <span class="select-count">已选 {{ selectedIds.length }} 项</span>
+      <div class="select-actions">
+        <el-button size="small" round type="primary" :disabled="selectedIds.length === 0" @click="batchComplete">
+          批量完成
+        </el-button>
+        <el-button size="small" round :disabled="selectedIds.length === 0" @click="batchRestore">
+          批量恢复
+        </el-button>
+        <el-button size="small" round type="danger" :disabled="selectedIds.length === 0" @click="batchRemove">
+          批量删除
+        </el-button>
+        <el-button size="small" round text @click="clearSelection">清空选择</el-button>
+      </div>
     </div>
 
     <!-- 列表 -->
@@ -29,10 +61,13 @@
         v-for="t in todoStore.list"
         :key="t.id"
         :todo="t"
+        :selectable="selectionMode"
+        :selected="selectedIds.includes(t.id)"
         @toggle="onToggle(t)"
         @edit="openEdit(t)"
         @convert="onConvert(t)"
         @remove="onRemove(t)"
+        @select="toggleSelect(t.id)"
       />
     </transition-group>
     <EmptyState v-else title="没有符合条件的待办" description="换个筛选条件，或新建一条待办" icon="List">
@@ -61,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import TodoCard from '@/components/TodoCard.vue'
@@ -85,6 +120,85 @@ const filters = reactive<Record<string, unknown>>({
   tag_ids: undefined,
   sort_by: undefined,
 })
+
+// ---------- 多选状态 ----------
+const selectionMode = ref(false)
+const selectedIds = ref<number[]>([])
+
+const allSelected = computed(() =>
+  todoStore.list.length > 0 && todoStore.list.every((t) => selectedIds.value.includes(t.id)),
+)
+const partialSelected = computed(() => {
+  const onPage = todoStore.list.filter((t) => selectedIds.value.includes(t.id)).length
+  return onPage > 0 && onPage < todoStore.list.length
+})
+
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value
+  if (!selectionMode.value) selectedIds.value = []
+}
+
+function toggleSelect(id: number) {
+  const idx = selectedIds.value.indexOf(id)
+  if (idx >= 0) selectedIds.value.splice(idx, 1)
+  else selectedIds.value.push(id)
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    const onPage = new Set(todoStore.list.map((t) => t.id))
+    selectedIds.value = selectedIds.value.filter((id) => !onPage.has(id))
+  } else {
+    const onPage = todoStore.list.map((t) => t.id)
+    selectedIds.value = Array.from(new Set([...selectedIds.value, ...onPage]))
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = []
+}
+
+async function batchComplete() {
+  try {
+    await todoStore.batchUpdateStatus([...selectedIds.value], 1)
+    ElMessage.success('已批量标记完成')
+    afterBatch()
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  }
+}
+
+async function batchRestore() {
+  try {
+    await todoStore.batchUpdateStatus([...selectedIds.value], 0)
+    ElMessage.success('已批量恢复未完成')
+    afterBatch()
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  }
+}
+
+async function batchRemove() {
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedIds.value.length} 条待办吗？删除后不可恢复。`, '批量删除', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      roundButton: true,
+    })
+    await todoStore.batchDelete([...selectedIds.value])
+    ElMessage.success('已批量删除')
+    afterBatch()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error((e as Error).message)
+  }
+}
+
+async function afterBatch() {
+  selectedIds.value = []
+  await load()
+}
 
 onMounted(async () => {
   tags.value = await tagApi.list()
@@ -195,6 +309,26 @@ function onSaved() {
 }
 .filter-item {
   width: 128px;
+}
+.select-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  margin-bottom: 14px;
+  border-color: rgba(108, 123, 255, 0.35);
+  background: linear-gradient(0deg, #f6f7ff, #ffffff);
+}
+.select-count {
+  font-size: 13px;
+  color: var(--vibe-primary);
+  font-weight: 600;
+}
+.select-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .loading-grid {
   display: flex;

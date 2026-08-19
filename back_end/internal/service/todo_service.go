@@ -172,6 +172,34 @@ func (s *TodoService) Delete(userID, id uint64) error {
 	})
 }
 
+// BatchDelete 批量删除待办：事务内软删除 + 清理全部相关提醒任务。
+func (s *TodoService) BatchDelete(userID uint64, ids []uint64) (int64, error) {
+	if err := validateBatchIDs(ids); err != nil {
+		return 0, errInvalid("批量操作参数不合法（1~100 条且 ID 有效）")
+	}
+	var affected int64
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		affected, err = s.todos.BatchDeleteTx(tx, ids, userID)
+		if err != nil {
+			return err
+		}
+		return s.reminders.DeleteByTargetsTx(tx, model.TargetTypeTodo, ids)
+	})
+	return affected, err
+}
+
+// BatchUpdateStatus 批量标记完成 / 恢复未完成。
+func (s *TodoService) BatchUpdateStatus(userID uint64, ids []uint64, status int) (int64, error) {
+	if err := validateBatchIDs(ids); err != nil {
+		return 0, errInvalid("批量操作参数不合法（1~100 条且 ID 有效）")
+	}
+	if status != model.TodoStatusPending && status != model.TodoStatusCompleted {
+		return 0, errInvalid("状态值不合法")
+	}
+	return s.todos.BatchUpdateStatus(ids, userID, status)
+}
+
 // UpdateStatus 标记完成/恢复未完成。
 func (s *TodoService) UpdateStatus(userID, id uint64, status int) error {
 	if status != model.TodoStatusPending && status != model.TodoStatusCompleted {
@@ -577,4 +605,17 @@ func isOverdue(t *model.Todo, today string) bool {
 		return t.StartTime < nowClock
 	}
 	return false
+}
+
+// validateBatchIDs 批量操作入参校验：非空、上限 100 条、ID 均大于 0。
+func validateBatchIDs(ids []uint64) error {
+	if len(ids) == 0 || len(ids) > 100 {
+		return errInvalid("批量操作需 1~100 条记录")
+	}
+	for _, id := range ids {
+		if id == 0 {
+			return errInvalid("包含无效 ID")
+		}
+	}
+	return nil
 }

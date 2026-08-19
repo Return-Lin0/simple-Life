@@ -1,13 +1,27 @@
 <template>
-  <div class="todo-card vibe-card" :class="{ done: todo.status === 1, overdue: todo.overdue }">
-    <!-- 完成切换：圆形勾选，动画丝滑 -->
-    <button class="check" :class="{ checked: todo.status === 1 }" @click="$emit('toggle')">
+  <div
+    class="todo-card vibe-card"
+    :class="{ done: todo.status === 1, overdue: todo.overdue, selectable, selected }"
+    @click="onBodyClick"
+  >
+    <!-- 多选模式：圆形选择框；普通模式：完成切换 -->
+    <button
+      v-if="!selectable"
+      class="check"
+      :class="{ checked: todo.status === 1 }"
+      @click.stop="$emit('toggle')"
+    >
       <transition name="pop">
         <el-icon v-if="todo.status === 1" :size="14"><Check /></el-icon>
       </transition>
     </button>
+    <button v-else class="check select-check" :class="{ checked: selected }" @click.stop="$emit('select')">
+      <transition name="pop">
+        <el-icon v-if="selected" :size="14"><Check /></el-icon>
+      </transition>
+    </button>
 
-    <div class="todo-body" @click="$emit('edit')">
+    <div class="todo-body">
       <div class="todo-title-row">
         <span class="todo-title">{{ todo.title }}</span>
         <span v-if="todo.overdue" class="badge overdue-badge">已逾期</span>
@@ -30,7 +44,7 @@
 
     <div class="priority-dot" :style="{ background: priorityColor }" :title="'优先级：' + priorityLabel"></div>
 
-    <el-dropdown trigger="click" @command="onCommand" class="todo-actions">
+    <el-dropdown v-if="!selectable" trigger="click" @command="onCommand" class="todo-actions">
       <button class="more-btn" @click.stop><el-icon><MoreFilled /></el-icon></button>
       <template #dropdown>
         <el-dropdown-menu>
@@ -57,12 +71,17 @@ import {
 } from '@/utils/format'
 import type { TodoView } from '@/types'
 
-const props = defineProps<{ todo: TodoView }>()
+const props = defineProps<{
+  todo: TodoView
+  selectable?: boolean
+  selected?: boolean
+}>()
 const emit = defineEmits<{
   (e: 'toggle'): void
   (e: 'edit'): void
   (e: 'convert'): void
   (e: 'remove'): void
+  (e: 'select'): void
 }>()
 
 const categoryLabel = computed(() => CATEGORY_LABELS[props.todo.category] || '其他')
@@ -75,6 +94,11 @@ function onCommand(cmd: string) {
   if (cmd === 'toggle') emit('toggle')
   else if (cmd === 'convert') emit('convert')
   else if (cmd === 'remove') emit('remove')
+}
+
+function onBodyClick() {
+  if (props.selectable) emit('select')
+  else emit('edit')
 }
 </script>
 
@@ -89,6 +113,14 @@ function onCommand(cmd: string) {
 }
 .todo-card:hover {
   border-color: var(--vibe-primary-light);
+}
+.todo-card.selectable {
+  cursor: pointer;
+}
+.todo-card.selected {
+  border-color: var(--vibe-primary);
+  background: var(--vibe-primary-soft);
+  box-shadow: 0 0 0 3px rgba(108, 123, 255, 0.18);
 }
 .todo-card.overdue {
   border-color: rgba(255, 107, 122, 0.4);
@@ -115,6 +147,10 @@ function onCommand(cmd: string) {
 .check.checked {
   background: var(--vibe-success);
   border-color: var(--vibe-success);
+}
+.check.select-check.checked {
+  background: var(--vibe-primary);
+  border-color: var(--vibe-primary);
 }
 
 .todo-body {

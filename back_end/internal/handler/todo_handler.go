@@ -133,6 +133,42 @@ func (h *TodoHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// BatchDelete 批量删除待办。
+func (h *TodoHandler) BatchDelete(c *gin.Context) {
+	uid := middleware.GetUserID(c)
+	var req dto.BatchTodoReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ParamError(c, "请求体格式不正确")
+		return
+	}
+	affected, err := h.todos.BatchDelete(uid, req.IDs)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	response.OK(c, gin.H{"affected": affected})
+}
+
+// BatchUpdateStatus 批量完成 / 恢复未完成。
+func (h *TodoHandler) BatchUpdateStatus(c *gin.Context) {
+	uid := middleware.GetUserID(c)
+	var req dto.BatchTodoReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ParamError(c, "请求体格式不正确")
+		return
+	}
+	if req.Status == nil {
+		response.ParamError(c, "缺少状态值")
+		return
+	}
+	affected, err := h.todos.BatchUpdateStatus(uid, req.IDs, *req.Status)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	response.OK(c, gin.H{"affected": affected})
+}
+
 // UpdateStatus 完成/恢复。
 func (h *TodoHandler) UpdateStatus(c *gin.Context) {
 	uid := middleware.GetUserID(c)
