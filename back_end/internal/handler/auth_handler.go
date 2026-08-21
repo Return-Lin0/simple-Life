@@ -108,6 +108,41 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// UpdateProfile 修改昵称。
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	uid := middleware.GetUserID(c)
+	var req dto.UpdateProfileReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ParamError(c, "请求体格式不正确")
+		return
+	}
+	user, err := h.authSvc.UpdateNickname(uid, req.Nickname)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	response.OK(c, dto.UserResp{
+		ID: user.ID, Username: user.Username, Nickname: user.Nickname,
+		Email: user.Email, Avatar: user.AvatarURL,
+	})
+}
+
+// ChangePassword 修改密码（需原密码，成功后吊销全部会话）。
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	uid := middleware.GetUserID(c)
+	var req dto.ChangePasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ParamError(c, "请求体格式不正确")
+		return
+	}
+	accessToken := trimBearer(c.GetHeader("Authorization"))
+	if err := h.authSvc.ChangePassword(uid, req.OldPassword, req.NewPassword, accessToken); err != nil {
+		respondError(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
 // trimBearer 去掉 Bearer 前缀。
 func trimBearer(s string) string {
 	if len(s) > 7 && s[:7] == "Bearer " {

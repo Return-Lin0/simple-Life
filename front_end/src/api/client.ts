@@ -30,6 +30,12 @@ export class ApiError extends Error {
 
 function normalizeError(error: AxiosError): Error {
   if (error instanceof ApiError) return error
+  // 优先使用后端返回的具体业务提示（如登录时的"用户名或密码错误"），
+  // 避免被统一的 401/400 文案覆盖。
+  const body = error.response?.data as { code?: number; message?: string } | undefined
+  if (body && typeof body.code === 'number' && body.message) {
+    return new ApiError(body.code, body.message)
+  }
   const status = error.response?.status
   if (status === 401) return new ApiError(1002, '登录已过期，请重新登录')
   if (status === 429) return new ApiError(1006, '操作过于频繁，请稍后再试')

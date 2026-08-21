@@ -137,6 +137,36 @@ Test-Case '登出后Token失效(401)' {
     $r = Invoke-Api GET '/auth/me' -Token $B.Token
     Assert-Status $r 401 '登出后Token'
 }
+Test-Case '修改昵称成功' {
+    $r = Invoke-Api PUT '/auth/profile' -Token $A.Token -Body @{ nickname = '新昵称' }
+    Assert-Status $r 200 '修改昵称'
+    Assert-True ($r.Data.data.nickname -eq '新昵称') '昵称未更新'
+}
+Test-Case '修改昵称空值被拒(400)' {
+    $r = Invoke-Api PUT '/auth/profile' -Token $A.Token -Body @{ nickname = '  ' }
+    Assert-Status $r 400 '空昵称'
+}
+Test-Case '原密码错误修改被拒(400)' {
+    $PW = New-TestUser
+    $r = Invoke-Api POST '/auth/change-password' -Token $PW.Token -Body @{ old_password = 'Wrong12345'; new_password = 'NewPass123' }
+    Assert-Status $r 400 '原密码错误'
+}
+Test-Case '新密码强度不足被拒(400)' {
+    $PW = New-TestUser
+    $r = Invoke-Api POST '/auth/change-password' -Token $PW.Token -Body @{ old_password = 'Abc12345'; new_password = '12345678' }
+    Assert-Status $r 400 '弱新密码'
+}
+Test-Case '修改密码成功后旧密码失效新密码可登录' {
+    $PW = New-TestUser
+    $r = Invoke-Api POST '/auth/change-password' -Token $PW.Token -Body @{ old_password = 'Abc12345'; new_password = 'NewPass123' }
+    Assert-Status $r 200 '修改密码'
+    $rOld = Invoke-Api POST '/auth/login' -Body @{ username = $PW.User; password = 'Abc12345' }
+    Assert-Status $rOld 401 '旧密码登录'
+    $rNew = Invoke-Api POST '/auth/login' -Body @{ username = $PW.User; password = 'NewPass123' }
+    Assert-Status $rNew 200 '新密码登录'
+    $rOldTok = Invoke-Api GET '/auth/me' -Token $PW.Token
+    Assert-Status $rOldTok 401 '旧会话吊销'
+}
 
 # ---------- 2. 标签 ----------
 Write-Host ''
@@ -260,9 +290,48 @@ Test-Case '待办转记事成功且防重复(409)' {
     Assert-Status $r2 409 '重复转换'
 }
 Test-Case '逾期事项标记' {
-    $t = (Invoke-Api POST '/todos' -Token $A.Token -Body @{ title = '昨日未完成'; event_date = '2026-08-18' }).Data.data.id
+    # 过去日期现在不允许通过接口创建，改用 SQL 直接插入逾期数据验证标记逻辑
+    $uid = (Invoke-Api GET '/auth/me' -Token $A.Token).Data.data.id
+    $null = Sql-Query "INSERT INTO todos (user_id,title,event_date,status,created_at,updated_at,priority,category,recurrence_type,recurrence_rule,is_all_day,reminder_enabled) VALUES ($uid,'昨日未完成','2026-08-18',0,NOW(),NOW(),1,'other',0,'null',0,0)"
+    $t = Sql-Query "SELECT id FROM todos WHERE user_id=$uid AND title='昨日未完成' ORDER BY id DESC LIMIT 1"
     $r = Invoke-Api GET "/todos/$t" -Token $A.Token
     if ($r.Data.data.overdue -ne $true) { throw "逾期标记缺失，原始响应：$($r.Raw)" }
+}
+Test-Case '创建过去日期被拒(400)' {
+    $r = Invoke-Api POST '/todos' -Token $A.Token -Body @{ title = '过去日期'; event_date = '2026-08-18' }
+    Assert-Status $r 400 '过去日期创建'
+}
+Test-Case '创建今天已过时间被拒(400)' {
+    $nowT = Get-Date
+    $pastT = $nowT.AddMinutes(-10)
+    $pastClock = if ($pastT.Date -eq $nowT.Date) { $pastT.ToString('HH:mm:ss') } else { '00:00:00' }
+    $r = Invoke-Api POST '/todos' -Token $A.Token -Body @{
+        title = '已过时间'; event_date = $nowT.ToString('yyyy-MM-dd'); start_time = $pastClock
+    }
+    Assert-Status $r 400 '已过开始时间'
+}
+Test-Case '编辑逾期事项：保留原日期允许、改为新过去日期被拒' {
+    $uid = (Invoke-Api GET '/auth/me' -Token $A.Token).Data.data.id
+    $null = Sql-Query "INSERT INTO todos (user_id,title,event_date,status,created_at,updated_at,priority,category,recurrence_type,recurrence_rule,is_all_day,reminder_enabled) VALUES ($uid,'逾期可编辑','2026-08-18',0,NOW(),NOW(),1,'other',0,'null',0,0)"
+    $id = Sql-Query "SELECT id FROM todos WHERE user_id=$uid AND title='逾期可编辑' ORDER BY id DESC LIMIT 1"
+    $r1 = Invoke-Api PUT "/todos/$id" -Token $A.Token -Body @{ title = '逾期可编辑2'; event_date = '2026-08-18' }
+    Assert-Status $r1 200 '保留原日期编辑'
+    $r2 = Invoke-Api PUT "/todos/$id" -Token $A.Token -Body @{ title = '逾期可编辑3'; event_date = '2026-08-17' }
+    Assert-Status $r2 400 '改为新过去日期'
+}
+Test-Case '提醒偏移超上限被拒(400)' {
+    $r = Invoke-Api POST '/todos' -Token $A.Token -Body @{
+        title = '偏移过大'; event_date = '2026-08-20'; start_time = '10:00:00'
+        reminder_enabled = $true; remind_offset_minutes = 10000
+    }
+    Assert-Status $r 400 '提醒偏移超限'
+}
+Test-Case '每周重复缺少星期规则被拒(400)' {
+    $r = Invoke-Api POST '/todos' -Token $A.Token -Body @{
+        title = '缺星期'; event_date = '2026-08-20'
+        recurrence_type = 2; recurrence_rule = '{"weekdays":[]}'
+    }
+    Assert-Status $r 400 '每周缺星期'
 }
 
 # ---------- 4. 待办批量操作 ----------
@@ -379,6 +448,11 @@ Test-Case '未来日期打卡被拒(400)' {
     $r = Invoke-Api POST "/habits/$h/checkin?date=2026-08-25" -Token $A.Token
     Assert-Status $r 400 '未来打卡'
 }
+Test-Case '打卡早于习惯创建日期被拒(400)' {
+    $h = (Invoke-Api POST '/habits' -Token $A.Token -Body @{ name = '新习惯' }).Data.data.id
+    $r = Invoke-Api POST "/habits/$h/checkin?date=2020-01-01" -Token $A.Token
+    Assert-Status $r 400 '早于创建日期打卡'
+}
 Test-Case '连续天数计算' {
     $h = (Invoke-Api POST '/habits' -Token $A.Token -Body @{ name = '连续习惯' }).Data.data.id
     $uid = (Invoke-Api GET '/auth/me' -Token $A.Token).Data.data.id
@@ -463,9 +537,11 @@ Test-Case '重复事项每实例生成提醒且不重复' {
 Write-Host ''
 Write-Host '[提醒送达]' -ForegroundColor Yellow
 Test-Case '到期提醒送达提醒中心且不重复' {
-    $now = Get-Date -Format 'HH:mm:ss'
+    # 开始时间设为 2 分钟后（今天的事项开始时间不能早于当前时间）
+    $start = (Get-Date).AddMinutes(2).ToString('HH:mm:ss')
+    $today = Get-Date -Format 'yyyy-MM-dd'
     $t = (Invoke-Api POST '/todos' -Token $A.Token -Body @{
-        title = '立即提醒测试'; event_date = '2026-08-19'; start_time = $now
+        title = '立即提醒测试'; event_date = $today; start_time = $start
         reminder_enabled = $true; remind_offset_minutes = 0
     }).Data.data.id
     $taskStatus = Sql-Query "SELECT status FROM reminder_tasks WHERE target_type=1 AND target_id=$t"

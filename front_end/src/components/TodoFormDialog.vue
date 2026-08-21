@@ -19,7 +19,14 @@
 
       <div class="form-grid">
         <el-form-item label="日期" prop="event_date">
-          <el-date-picker v-model="form.event_date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+          <el-date-picker
+            v-model="form.event_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择日期"
+            :disabled-date="disabledDate"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="全天事项">
           <el-switch v-model="form.is_all_day" @change="onAllDayChange" />
@@ -93,6 +100,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import dayjs from 'dayjs'
 import { useTodoStore } from '@/stores/todo'
 import { buildRecurrenceRule, WEEKDAY_NAMES } from '@/utils/format'
 import type { Tag, Todo } from '@/types'
@@ -138,6 +146,16 @@ const rules: FormRules = {
     { min: 1, max: 128, message: '名称长度 1~128 个字符', trigger: 'blur' },
   ],
   event_date: [{ required: true, message: '请选择日期', trigger: 'change' }],
+}
+
+// 禁止选择早于今天的日期；编辑已有逾期事项时允许保留原日期
+function disabledDate(date: Date) {
+  const d = dayjs(date).format('YYYY-MM-DD')
+  const today = dayjs().format('YYYY-MM-DD')
+  if (d < today) {
+    return !(isEdit.value && props.todo && d === props.todo.event_date)
+  }
+  return false
 }
 
 function onOpen() {
@@ -206,6 +224,22 @@ async function submit() {
   if (!form.is_all_day && form.start_time && form.end_time && form.end_time <= form.start_time) {
     ElMessage.warning('结束时间必须晚于开始时间')
     return
+  }
+  // 日期校验：不能早于今天（编辑时允许保留原逾期日期）
+  const today = dayjs().format('YYYY-MM-DD')
+  if (form.event_date < today) {
+    if (!(isEdit.value && props.todo && form.event_date === props.todo.event_date)) {
+      ElMessage.warning('待办日期不能早于今天，请重新选择日期')
+      return
+    }
+  }
+  // 今天的事项：开始时间不能早于当前时间
+  if (!form.is_all_day && form.start_time && form.event_date === today) {
+    const nowClock = dayjs().format('HH:mm:ss')
+    if (form.start_time < nowClock) {
+      ElMessage.warning('今天的事项开始时间不能早于当前时间')
+      return
+    }
   }
 
   const payload = {

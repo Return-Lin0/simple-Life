@@ -39,7 +39,7 @@
           <el-switch v-model="form.remind_enabled" />
         </el-form-item>
         <el-form-item v-if="form.remind_enabled" label="提前几天提醒">
-          <el-input-number v-model="form.remind_days_before" :min="0" :max="30" />
+          <el-input-number v-model="form.remind_days_before" :min="0" :max="366" />
         </el-form-item>
       </el-form>
       <template #footer>

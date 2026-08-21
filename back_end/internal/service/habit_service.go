@@ -85,6 +85,11 @@ func (s *HabitService) Checkin(userID, habitID uint64, date string) error {
 	if parsed.After(timeutil.Now()) {
 		return errInvalid("禁止为未来日期打卡")
 	}
+	// 现实逻辑：打卡日期不能早于习惯的创建日期
+	createdDay := timeutil.StartOfDay(habit.CreatedAt.In(timeutil.Loc))
+	if parsed.Before(createdDay) {
+		return errInvalid("打卡日期不能早于习惯创建日期")
+	}
 	rec := &model.HabitRecord{HabitID: habit.ID, UserID: userID, RecordDate: date}
 	if err := s.records.Create(rec); err != nil {
 		if repository.IsDuplicate(err) {

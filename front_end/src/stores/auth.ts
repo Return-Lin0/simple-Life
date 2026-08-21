@@ -26,6 +26,15 @@ export const useAuthStore = defineStore('auth', {
     async register(username: string, password: string, nickname: string) {
       return authApi.register({ username, password, nickname })
     },
+    async updateNickname(nickname: string) {
+      this.user = await authApi.updateProfile(nickname)
+      return this.user
+    },
+    // 修改密码成功后服务端已吊销全部会话，本地直接清理并跳转登录
+    async changePassword(oldPassword: string, newPassword: string) {
+      await authApi.changePassword(oldPassword, newPassword)
+      this.clearSession()
+    },
     async logout() {
       try {
         await authApi.logout()

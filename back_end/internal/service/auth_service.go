@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +30,7 @@ var (
 	ErrAccountDisabled   = errors.New("账号不可用")
 	ErrSessionRevoked    = errors.New("会话已失效，请重新登录")
 	ErrInvalidToken      = errors.New("令牌无效")
+	ErrWrongPassword     = errors.New("原密码不正确")
 	// ErrInvalidInput 参数/业务校验错误，统一映射为 HTTP 400。
 	ErrInvalidInput = errors.New("参数错误")
 )
@@ -211,6 +213,54 @@ func (s *AuthService) Logout(accessClaims, refreshClaims *auth.Claims) error {
 // GetUser 获取用户信息（鉴权中间件校验用户状态复用）。
 func (s *AuthService) GetUser(id uint64) (*model.User, error) {
 	return s.users.GetByID(id)
+}
+
+// UpdateNickname 修改昵称。
+func (s *AuthService) UpdateNickname(userID uint64, nickname string) (*model.User, error) {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" || len([]rune(nickname)) > 32 {
+		return nil, errInvalid("昵称不能为空且不超过 32 个字符")
+	}
+	if _, err := s.users.GetByID(userID); err != nil {
+		return nil, ErrNotFound
+	}
+	if err := s.users.UpdateNickname(userID, nickname); err != nil {
+		return nil, err
+	}
+	return s.users.GetByID(userID)
+}
+
+// ChangePassword 修改密码：
+// 校验原密码 → 校验新密码强度 → 更新哈希 → 吊销全部会话并把当前 Token 加入黑名单。
+func (s *AuthService) ChangePassword(userID uint64, oldPassword, newPassword, accessToken string) error {
+	if err := dto.ValidatePassword(newPassword); err != nil {
+		return errInvalid(err.Error())
+	}
+	user, err := s.users.GetByID(userID)
+	if err != nil {
+		return ErrNotFound
+	}
+	if !auth.CheckPassword(user.PasswordHash, oldPassword) {
+		return ErrWrongPassword
+	}
+	hash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.users.UpdatePassword(userID, hash); err != nil {
+		return err
+	}
+	// 安全策略：修改密码后吊销全部会话
+	_ = s.RevokeAllUserSessions(userID)
+	if accessToken != "" {
+		if claims, err := s.jwt.Parse(accessToken, auth.TokenTypeAccess); err == nil {
+			ttl := time.Until(claims.ExpiresAt.Time)
+			if ttl > 0 {
+				_ = s.rdb.Set(context.Background(), "auth:blacklist:"+claims.JTI, "1", ttl).Err()
+			}
+		}
+	}
+	return nil
 }
 
 // storeRefreshToken 将 Refresh Token 哈希写入 Redis 白名单。

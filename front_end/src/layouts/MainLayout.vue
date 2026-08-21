@@ -136,6 +136,8 @@ const navItems = [
   { name: 'habits', label: '习惯打卡', icon: 'Medal' },
   { name: 'anniversaries', label: '纪念日', icon: 'Present' },
   { name: 'notifications', label: '提醒中心', icon: 'Bell' },
+  { name: 'tags', label: '标签管理', icon: 'CollectionTag' },
+  { name: 'settings', label: '设置', icon: 'Setting' },
 ]
 
 const pageTitle = computed(() => (route.meta.title as string) || 'SimpleLife')

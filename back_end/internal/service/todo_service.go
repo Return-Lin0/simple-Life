@@ -51,11 +51,18 @@ func (s *TodoService) Create(userID uint64, req *dto.TodoReq) (*model.Todo, erro
 	if err := req.ValidateTodo(); err != nil {
 		return nil, errInvalid(err.Error())
 	}
+	if err := req.ValidateRecurrenceRule(); err != nil {
+		return nil, errInvalid(err.Error())
+	}
 	if err := req.ValidateTimeRange(); err != nil {
 		return nil, errInvalid(err.Error())
 	}
-	if _, err := timeutil.ParseDate(req.EventDate); err != nil {
+	eventDate, err := timeutil.ParseDate(req.EventDate)
+	if err != nil {
 		return nil, errInvalid(ErrInvalidDate.Error())
+	}
+	if err := validateTodoDateTime(req, eventDate, ""); err != nil {
+		return nil, err
 	}
 	if req.StartTime != "" {
 		if _, err := timeutil.ParseClock(req.StartTime); err != nil {
@@ -73,7 +80,7 @@ func (s *TodoService) Create(userID uint64, req *dto.TodoReq) (*model.Todo, erro
 	}
 
 	todo := s.buildTodo(userID, req)
-	var err error
+	err = nil
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.todos.CreateTx(tx, todo); err != nil {
 			return err
@@ -101,8 +108,19 @@ func (s *TodoService) Update(userID, id uint64, req *dto.TodoReq) (*model.Todo, 
 	if err := req.ValidateTodo(); err != nil {
 		return nil, errInvalid(err.Error())
 	}
+	if err := req.ValidateRecurrenceRule(); err != nil {
+		return nil, errInvalid(err.Error())
+	}
 	if err := req.ValidateTimeRange(); err != nil {
 		return nil, errInvalid(err.Error())
+	}
+	eventDate, err := timeutil.ParseDate(req.EventDate)
+	if err != nil {
+		return nil, errInvalid(ErrInvalidDate.Error())
+	}
+	// 编辑已逾期事项时允许保留原日期，但不得改成新的过去日期
+	if err := validateTodoDateTime(req, eventDate, existing.EventDate); err != nil {
+		return nil, err
 	}
 	if err := s.validateTags(userID, req.Tags); err != nil {
 		return nil, err
@@ -605,6 +623,23 @@ func isOverdue(t *model.Todo, today string) bool {
 		return t.StartTime < nowClock
 	}
 	return false
+}
+
+// validateTodoDateTime 校验待办日期与时间的现实逻辑：
+//   - 日期不能早于今天（编辑时允许保留原有逾期日期）；
+//   - 今天的事项，开始时间不能早于当前时间。
+func validateTodoDateTime(req *dto.TodoReq, eventDate time.Time, originalDate string) error {
+	today := timeutil.StartOfDay(timeutil.Now())
+	if eventDate.Before(today) && req.EventDate != originalDate {
+		return errInvalid("待办日期不能早于今天（可保留原有逾期日期，或调整到今天及以后）")
+	}
+	if !req.IsAllDay && req.StartTime != "" && eventDate.Equal(today) {
+		nowClock := timeutil.Now().Format(timeutil.TimeLayout)
+		if req.StartTime < nowClock {
+			return errInvalid("今天的事项开始时间不能早于当前时间")
+		}
+	}
+	return nil
 }
 
 // validateBatchIDs 批量操作入参校验：非空、上限 100 条、ID 均大于 0。

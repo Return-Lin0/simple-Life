@@ -30,6 +30,8 @@ func respondError(c *gin.Context, err error) {
 		response.Conflict(c, err.Error())
 	case errors.Is(err, service.ErrInvalidCredentials):
 		response.Error(c, 401, response.CodeAuthLoginError, err.Error())
+	case errors.Is(err, service.ErrWrongPassword):
+		response.ParamError(c, err.Error())
 	case errors.Is(err, service.ErrAccountLocked):
 		response.TooManyRequests(c, err.Error())
 	case errors.Is(err, service.ErrAccountDisabled):

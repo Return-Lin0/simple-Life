@@ -68,6 +68,18 @@ const routes = [
         component: () => import('@/views/NotificationsView.vue'),
         meta: { title: '提醒中心' },
       },
+      {
+        path: 'tags',
+        name: 'tags',
+        component: () => import('@/views/TagManageView.vue'),
+        meta: { title: '标签管理' },
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: () => import('@/views/SettingsView.vue'),
+        meta: { title: '设置' },
+      },
     ],
   },
   {

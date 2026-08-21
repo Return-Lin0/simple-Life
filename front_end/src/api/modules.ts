@@ -25,6 +25,10 @@ export const authApi = {
   refresh: () => request<{ access_token: string; expires_in: number }>({ url: '/auth/refresh', method: 'POST' }),
   logout: () => request<null>({ url: '/auth/logout', method: 'POST' }),
   me: () => request<UserInfo>({ url: '/auth/me', method: 'GET' }),
+  updateProfile: (nickname: string) =>
+    request<UserInfo>({ url: '/auth/profile', method: 'PUT', data: { nickname } }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<null>({ url: '/auth/change-password', method: 'POST', data: { old_password: oldPassword, new_password: newPassword } }),
 }
 
 // ---------- 待办 ----------

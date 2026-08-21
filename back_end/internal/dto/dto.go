@@ -28,6 +28,17 @@ type LoginReq struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// UpdateProfileReq 修改昵称请求。
+type UpdateProfileReq struct {
+	Nickname string `json:"nickname" binding:"required"`
+}
+
+// ChangePasswordReq 修改密码请求（需校验原密码）。
+type ChangePasswordReq struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
+}
+
 // UserResp 用户信息响应（绝不包含密码哈希）。
 type UserResp struct {
 	ID       uint64 `json:"id"`
@@ -198,8 +209,35 @@ func (r *TodoReq) ValidateTodo() error {
 			return errors.New("重复规则必须是合法 JSON")
 		}
 	}
-	if r.ReminderEnabled && r.RemindOffsetMinutes != nil && *r.RemindOffsetMinutes < 0 {
-		return errors.New("提前提醒分钟数不能为负")
+	if r.ReminderEnabled && r.RemindOffsetMinutes != nil {
+		if *r.RemindOffsetMinutes < 0 || *r.RemindOffsetMinutes > 1440 {
+			return errors.New("提前提醒分钟数必须在 0~1440 之间")
+		}
+	}
+	return nil
+}
+
+// ValidateRecurrenceRule 校验重复规则：
+// 每周重复必须提供至少一个有效星期（1=周一 … 7=周日），其余类型不允许携带规则。
+func (r *TodoReq) ValidateRecurrenceRule() error {
+	if r.RecurrenceType == model.RecurrenceWeekly {
+		var rule struct {
+			Weekdays []int `json:"weekdays"`
+		}
+		if r.RecurrenceRule == "" || json.Unmarshal([]byte(r.RecurrenceRule), &rule) != nil || len(rule.Weekdays) == 0 {
+			return errors.New("每周重复必须指定至少一个星期")
+		}
+		for _, w := range rule.Weekdays {
+			if w < 1 || w > 7 {
+				return errors.New("星期取值必须为 1（周一）~ 7（周日）")
+			}
+		}
+		return nil
+	}
+	// 非每周重复：规则应留空（由服务层归一化为 null），携带规则视为不匹配
+	rule := strings.TrimSpace(r.RecurrenceRule)
+	if rule != "" && rule != "null" {
+		return errors.New("仅每周重复需要填写重复规则")
 	}
 	return nil
 }
@@ -234,8 +272,8 @@ func (r *AnniversaryReq) ValidateAnniversary() error {
 	if strings.TrimSpace(r.Name) == "" || len([]rune(r.Name)) > 64 {
 		return errors.New("纪念日名称不能为空且不超过 64 个字符")
 	}
-	if r.RemindDaysBefore < 0 {
-		return errors.New("提前提醒天数不能为负")
+	if r.RemindDaysBefore < 0 || r.RemindDaysBefore > 366 {
+		return errors.New("提前提醒天数必须在 0~366 之间")
 	}
 	return nil
 }

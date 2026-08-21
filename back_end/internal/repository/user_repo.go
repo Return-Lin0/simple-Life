@@ -53,6 +53,16 @@ func (r *UserRepo) GetByID(id uint64) (*model.User, error) {
 	return &u, nil
 }
 
+// UpdateNickname 修改昵称。
+func (r *UserRepo) UpdateNickname(id uint64, nickname string) error {
+	return r.db.Model(&model.User{}).Where("id = ?", id).Update("nickname", nickname).Error
+}
+
+// UpdatePassword 更新密码哈希（修改密码时使用）。
+func (r *UserRepo) UpdatePassword(id uint64, passwordHash string) error {
+	return r.db.Model(&model.User{}).Where("id = ?", id).Update("password_hash", passwordHash).Error
+}
+
 // IsDuplicate 判断是否唯一键冲突。
 // 兼容两种来源：GORM 翻译后的 gorm.ErrDuplicatedKey，以及 MySQL 原生 1062 错误。
 func IsDuplicate(err error) bool {

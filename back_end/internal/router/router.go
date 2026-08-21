@@ -59,6 +59,8 @@ func New(cfg *config.Config, deps *Deps) *gin.Engine {
 	protected.Use(middleware.UserRateLimit(deps.Redis, cfg.Security.APIRateLimitPerMinute))
 
 	protected.GET("/auth/me", deps.Auth.Me)
+	protected.PUT("/auth/profile", deps.Auth.UpdateProfile)
+	protected.POST("/auth/change-password", deps.Auth.ChangePassword)
 
 	// 待办
 	protected.GET("/todos", deps.Todo.List)

@@ -56,6 +56,26 @@
       </EmptyState>
     </section>
 
+    <!-- 今日已完成 -->
+    <section v-if="doneList.length" class="section">
+      <h2 class="section-title success">
+        <el-icon><CircleCheckFilled /></el-icon>
+        今日已完成
+        <span class="section-count">{{ doneList.length }}</span>
+      </h2>
+      <transition-group name="list" tag="div">
+        <TodoCard
+          v-for="t in doneList"
+          :key="t.id"
+          :todo="t"
+          @toggle="onToggle(t)"
+          @edit="openEdit(t)"
+          @convert="onConvert(t)"
+          @remove="onRemove(t)"
+        />
+      </transition-group>
+    </section>
+
     <!-- 新建按钮 -->
     <button class="fab" title="新建待办" @click="openCreate">
       <el-icon :size="22"><Plus /></el-icon>
@@ -88,6 +108,7 @@ const tags = ref<Tag[]>([])
 const overdueList = computed(() => todoStore.today.filter((t) => t.overdue && t.status === 0))
 const pendingToday = computed(() => todoStore.today.filter((t) => !t.overdue && t.status === 0))
 const doneToday = ref(0)
+const doneList = ref<TodoView[]>([])
 
 onMounted(async () => {
   await Promise.all([
@@ -105,8 +126,10 @@ async function fetchDoneToday() {
     const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
     const data = await todoApi.list({ start_date: dateStr, end_date: dateStr, status: 1, page_size: 100 })
     doneToday.value = data.total
+    doneList.value = data.list
   } catch {
     doneToday.value = 0
+    doneList.value = []
   }
 }
 
@@ -123,7 +146,7 @@ function openEdit(t: Todo) {
 async function onToggle(t: TodoView) {
   try {
     await todoStore.toggleStatus(t)
-    await todoStore.fetchToday()
+    await refreshAll()
   } catch (e) {
     ElMessage.error((e as Error).message)
   }
@@ -139,7 +162,7 @@ async function onConvert(t: TodoView) {
     })
     await todoStore.convertToNote(t.id)
     ElMessage.success('已转为记事')
-    await todoStore.fetchToday()
+    await refreshAll()
   } catch (e) {
     if (e === 'cancel' || e === 'close') return
     ElMessage.error((e as Error).message)
@@ -156,15 +179,20 @@ async function onRemove(t: TodoView) {
     })
     await todoStore.remove(t.id)
     ElMessage.success('已删除')
-    await todoStore.fetchToday()
+    await refreshAll()
   } catch (e) {
     if (e === 'cancel' || e === 'close') return
     ElMessage.error((e as Error).message)
   }
 }
 
-function onSaved() {
-  todoStore.fetchToday()
+async function onSaved() {
+  await refreshAll()
+}
+
+// 主看板联动刷新：今日事项列表 + 今日已完成统计
+async function refreshAll() {
+  await Promise.all([todoStore.fetchToday(), fetchDoneToday()])
 }
 </script>
 
@@ -212,6 +240,18 @@ function onSaved() {
 }
 .section-title.danger {
   color: var(--vibe-danger);
+}
+.section-title.success {
+  color: var(--vibe-success);
+}
+.section-count {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vibe-success);
+  background: rgba(52, 195, 143, 0.14);
 }
 .loading-grid {
   display: flex;
